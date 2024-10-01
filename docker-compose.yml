@@ -1,0 +1,58 @@
+services:
+    app:
+        build:
+            args:
+                user: ${USER}
+                uid: ${UID:-1000}
+                group: ${GROUP:-1000}
+            context: .
+            dockerfile: .docker/app.dockerfile
+        container_name: ${PROJECT_NAME}-app
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        restart: unless-stopped
+        ports:
+            - 5173:5173
+        depends_on:
+            - db
+        volumes:
+            - .:/var/www/html:delegated
+            - ./.docker/php/conf.d/xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+            - ./.docker/php/conf.d/error_reporting.ini:/usr/local/etc/php/conf.d/error_reporting.ini
+        networks:
+            - network
+    nginx:
+        image: nginx:1.17-alpine
+        container_name: ${PROJECT_NAME}-nginx
+        restart: unless-stopped
+        depends_on:
+            - app
+        ports:
+            - "${WEB_SERVER_PORT:-8080}:80"
+        volumes:
+            - .:/var/www/html
+            - ./.docker/nginx:/etc/nginx/conf.d
+            - ./.docker/nginx/log:/var/log/nginx
+        networks:
+            - network
+    db:
+        image: "postgres"
+        container_name: ${PROJECT_NAME}-db
+        restart: unless-stopped
+        ports:
+            - "${FORWARD_DB_PORT:-5432}:5432"
+        environment:
+            POSTGRES_DB: "${DB_DATABASE}"
+            POSTGRES_USER: "${DB_USERNAME}"
+            POSTGRES_PASSWORD: "${DB_PASSWORD}"
+        volumes:
+            - ".:/var/www/html"
+            - "db_pgsql:/var/lib/pgsql"
+        networks:
+            - network
+networks:
+    network:
+        driver: bridge
+volumes:
+    db_pgsql:
+        driver: local
