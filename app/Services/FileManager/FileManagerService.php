@@ -2,36 +2,42 @@
 
 namespace App\Services\FileManager;
 
-use App\Services\FileManager\Exceptions\DirectoryExistsException;
-use App\Services\FileManager\Exceptions\DirectoryNotFoundException;
+use App\Interfaces\FileRepositoryInterface;
 use App\Services\FileManager\Interfaces\FileManager;
 use Illuminate\Contracts\Filesystem\Filesystem;
+use Illuminate\Database\ConnectionResolverInterface;
+use Symfony\Component\HttpFoundation\File\File;
+use App\Models\File as FileModel;
 
 class FileManagerService implements FileManager
 {
-    public function __construct(private readonly Filesystem $storage) {}
+    public function __construct(
+        private readonly Filesystem $storage,
+        private readonly FileRepositoryInterface $repository
+    ) {}
 
-    public function createDirectory(string $directory): bool
+    public function uploadFile(File $file, string $path): FileModel
     {
-        if (!$this->storage->exists($directory)) {
-            return $this->storage->makeDirectory($directory);
-        }
-        throw new DirectoryExistsException($directory);
+        return $this->repository->store($file, $this->storage->putFile($path, $file));
     }
 
-    public function deleteDirectory(string $directory): bool
+    public function uploadFiles(array $files, string $path, ConnectionResolverInterface $databaseManager): bool
     {
-        if ($this->storage->exists($directory)) {
-            return $this->storage->deleteDirectory($directory);
+        $result = [];
+        try {
+            $databaseManager->beginTransaction();
+            foreach ($files as $file) {
+                $result[$this->storage->putFile($path, $file)] = $file;
+            }
+            $result = $this->repository->storeArray($result);
+            $databaseManager->commit();
+            return $result;
+        } catch (\Throwable $th) {
+            foreach ($result as $file) {
+                $this->storage->delete($path);
+            }
+            $databaseManager->rollBack();
+            throw $th;
         }
-        throw new DirectoryNotFoundException($directory);
-    }
-
-    public function renameDirectory(string $from, string $to): bool
-    {
-        if ($this->storage->exists($from)) {
-            return $this->storage->move($from, $to);
-        }
-        throw new DirectoryNotFoundException($from);
     }
 }

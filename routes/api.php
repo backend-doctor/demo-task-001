@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\DirectoryManagerController;
+use App\Http\Controllers\FileManagerController;
 use Illuminate\Support\Facades\Route;
 
 Route::controller(DirectoryManagerController::class)
@@ -12,4 +13,10 @@ Route::controller(DirectoryManagerController::class)
             ->name('delete.dir');
         Route::patch('dir',  'renameDirectory')
             ->name('rename.dir');
+    });
+
+Route::controller(FileManagerController::class)
+    ->group(function () {
+        Route::post('upload', 'uploadFiles')
+            ->name('upload-files');
     });
